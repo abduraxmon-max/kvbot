@@ -17,6 +17,7 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 from dotenv import load_dotenv
+from aiohttp import web
 
 
 # =========================
@@ -705,15 +706,39 @@ async def reject_song_callback(callback: CallbackQuery):
 # MAIN
 # =========================
 
+async def health_check(request):
+    return web.Response(text="Music Library Bot is running")
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    port = int(os.getenv("PORT", "10000"))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+    logging.info("HTTP server 0.0.0.0:%s da ishga tushdi.", port)
+    return runner
+
+
 async def main():
     logging.basicConfig(level=logging.INFO)
     await init_db()
     logging.info("Music Library bot ishga tushdi.")
 
+    runner = None
     try:
+        runner = await start_web_server()
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
+        if runner is not None:
+            await runner.cleanup()
         await bot.session.close()
 
 
